@@ -303,7 +303,7 @@
 			<!-- Add this line -->
 			<p
 				>Loading visualizer <span class="loading loading-ring loading-md"
-				></span></p
+				></span> </p
 			>
 			<!--small text-->
 			<div class="flex flex-row justify-between">
