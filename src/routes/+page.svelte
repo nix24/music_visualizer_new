@@ -42,6 +42,9 @@
 	 */
 	let unsubscribe;
 
+	/**
+	 * @type {HTMLElement | null}
+	 */
 	let file;
 
 	/**
@@ -59,34 +62,20 @@
 	 */
 	let visualizerContainer;
 
+	/**
+	 * @type {Element | null}
+	 */
 	let pulse;
 
 	let isLoading = false;
 
+	/**
+	 * @type {number | null}
+	 */
 	let animatePulseRequestId = null;
 
-	const cleanup = () => {
-		if (audioSrc) {
-			audioSrc.disconnect();
-			audioSrc = null;
-		}
-		if (analyser) {
-			analyser.disconnect();
-			analyser = null;
-		}
-		if (animatePulseRequestId !== null) {
-			cancelAnimationFrame(animatePulseRequestId);
-			animatePulseRequestId = null;
-		}
-		if (resizeObserver) {
-			resizeObserver.disconnect();
-		}
-	};
-
 	const createVisualizer = () => {
-		if (resizeObserver) {
-			resizeObserver.disconnect();
-		}
+		console.log("creating visualizer");
 		ctx = canvasElement.getContext("2d");
 		// @ts-ignore
 		analyser.fftSize = 512;
@@ -118,8 +107,10 @@
 			x = 0;
 			if (ctx) {
 				ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-				// @ts-ignore
 				analyser.getByteFrequencyData(dataArr);
+
+				//create a random aplette
+				
 				// @ts-ignore
 				const colorScale = chroma.scale([
 					colors.accent,
@@ -128,18 +119,18 @@
 				]);
 
 				for (let i = 0; i < bufferLength; i++) {
-					barHeight = dataArr[i] * 1.1;
+					barHeight = dataArr[i] * 1.3;
 					ctx.save();
 					ctx.translate(
 						canvasElement.width / (2 * window.devicePixelRatio),
 						canvasElement.height / (2 * window.devicePixelRatio)
 					); // Adjust translate for high resolution displays
-					ctx.rotate((i * Math.PI * 4.3) / bufferLength);
+					ctx.rotate((i * Math.PI * 4.2) / bufferLength);
 					const color = colorScale(dataArr[i] / 255).hex();
 					ctx.fillStyle = color;
 
 					ctx.fillRect(0, 0, barWidth, barHeight);
-					x += barWidth * 1.25;
+					x += barWidth;
 					ctx.restore();
 				}
 				requestAnimationFrame(animate);
@@ -155,23 +146,18 @@
 			audioElement.play();
 		}
 
-		if (!audioSrc || !analyser) {
-			try {
-				audioSrc = audioCtx.createMediaElementSource(audioElement);
-				analyser = audioCtx.createAnalyser();
-				audioSrc.connect(analyser);
-				analyser.connect(audioCtx.destination);
-				createVisualizer();
-			} catch (error) {
-				console.log("The source is already connected to an analyser.");
-			}
-
-			if (audioCtx.state === "suspended") {
-				audioCtx.resume();
-			}
-
-			audioElement.play();
+		try {
+			createVisualizer();
+		} catch (error) {
+			console.log(`Error: ${error}`);
+			console.log("visualizer not created due to try catch failing");
 		}
+
+		if (audioCtx.state === "suspended") {
+			audioCtx.resume();
+		}
+
+		audioElement.play();
 	};
 
 	onMount(() => {
@@ -207,8 +193,9 @@
 		visualizerContainer.addEventListener("click", playMusic);
 
 		// @ts-ignore
-		file.addEventListener("change", async function () {
-			cleanup();
+		file.addEventListener("change", async function handleFileChange() {
+			//only clean up on 2nd and subsequent uploads
+			console.log("file change");
 
 			// @ts-ignore
 			const files = this.files;
@@ -221,11 +208,29 @@
 
 			// Create the AudioContext when the file is uploaded
 			if (!audioCtx) {
+				console.log("audioCtx is null creating new one");
 				audioCtx = new AudioContext();
 			}
+			if (audioSrc && analyser) {
+				console.log("disconnecting audioSrc and analyser");
+				audioSrc.disconnect(analyser);
+				analyser.disconnect(audioCtx.destination);
+			}
+			if (!audioSrc) {
+				console.log("audioSrc is null creating new one");
+				audioSrc = audioCtx.createMediaElementSource(audioElement);
+			}
+			if (!analyser) {
+				console.log("analyser is null creating new one");
+				analyser = audioCtx.createAnalyser();
+			}
+			audioSrc.connect(analyser);
+			console.log("audioSrc connected to analyser");
+			analyser.connect(audioCtx.destination);
 
 			// Get the audio buffer when the audio can play through
 			audioElement.oncanplaythrough = async () => {
+				console.log(`audioElement: ${audioElement.src} is ready to play`);
 				isLoading = true;
 				const response = await fetch(audioElement.src);
 				const arrayBuffer = await response.arrayBuffer();
@@ -247,7 +252,6 @@
 
 				// Calculate the duration of one beat in milliseconds
 				const beatDuration = 60000 / bpm; // 60 seconds * 1000 milliseconds
-				isLoading = false;
 
 				const animatePulse = () => {
 					const rotationAngle = Date.now() / 100; // Adjust divisor to change rotation speed
@@ -260,8 +264,21 @@
 					requestAnimationFrame(animatePulse);
 				};
 				animatePulse();
+				console.log("attempting to playMusic");
+				isLoading = false;
+
 				playMusic();
 			};
+			//if file is not null
+			if (file) {
+				console.log("removing event listener: file");
+				//remove and then reset it wiith the same functino
+				file.removeEventListener("change", handleFileChange);
+
+				//now we put it back
+				console.log("adding event listener: file");
+				file.addEventListener("change", handleFileChange);
+			}
 		});
 	});
 
@@ -280,7 +297,7 @@
 	<div class="control-p">
 		<Icon
 			icon="icon-park-outline:cd"
-			class="pulse text-primary w-20 h-20 mb-2 "
+			class="pulse text-primary w-20 h-20 mb-2"
 		/>
 		{#if isLoading}
 			<!-- Add this line -->
@@ -289,7 +306,7 @@
 				></span></p
 			>
 			<!--small text-->
-			<div class="flex flex-row">
+			<div class="flex flex-row justify-between">
 				<span class="loading loading-bars loading-sm"></span>
 				<p class="text-sm font-thin"
 					>if you use the audio controls, the changes affect the visualizer in
@@ -303,7 +320,7 @@
 		<input
 			type="file"
 			id="fileUpload"
-			class="opacity-50 my-5 file-input file-input-bordered file-input-md file-input-accent"
+			class="opacity-70 my-5 file-input file-input-bordered file-input-sm file-input-accent"
 			accept="audio/*"
 		/>
 	</div>
