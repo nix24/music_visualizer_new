@@ -325,7 +325,7 @@
 		/>
 	</div>
 	<div class="visualizer-container">
-		<canvas id="canvas1" class="pulse"></canvas>
+		<canvas id="canvas1"></canvas>
 	</div>
 </div>
 
